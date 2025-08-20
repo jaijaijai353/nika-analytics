@@ -29,21 +29,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        response_format: { type: "json_object" },
-        temperature: 0.2,
+        temperature: 0,
+        response_format: { type: "json_object" }, // 👈 enforce JSON only
         messages: [
           {
             role: "system",
-            content: [
-              "You are a strict JSON generator for data analysis.",
-              "Always reply with a single JSON object with EXACT keys:",
-              "{",
-              '  \"answer\": string,',
-              '  \"data_preview\": array of objects (up to 10 rows),',
-              '  \"charts\": array of objects like { \"type\": \"bar|line|pie|scatter\", \"x\": string, \"y\": string }',
-              "}",
-              "Do not include any extra commentary."
-            ].join(" ")
+            content:
+              "You are a data analysis assistant. ALWAYS respond with a strict JSON object only. Format:\n" +
+              "{\n" +
+              '  "answer": string,\n' +
+              '  "data_preview": array of objects (max 10 rows),\n' +
+              '  "charts": array of objects like { "type": "bar|line|pie|scatter", "x": string, "y": string }\n' +
+              "}\n" +
+              "Never include explanations, markdown, or text outside the JSON object."
           },
           {
             role: "user",
@@ -59,17 +57,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const data = await openaiRes.json();
     const text = data?.choices?.[0]?.message?.content || "";
 
+    console.log("RAW MODEL RESPONSE:", text); // 👈 Debugging
+
     let payload: any = null;
     try {
       payload = JSON.parse(text);
     } catch (_e) {
       payload = {
-        answer: text || "No answer from model.",
+        answer: "Model did not return valid JSON.",
         data_preview: sample.slice(0, 10),
         charts: []
       };
     }
 
+    // ✅ Safety checks
     if (!payload || typeof payload !== "object") {
       payload = { answer: "No answer.", data_preview: sample.slice(0, 10), charts: [] };
     }
@@ -86,5 +87,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "Failed to contact OpenAI" });
   }
 }
+
 
 
