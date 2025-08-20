@@ -1,6 +1,14 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Home, RectangleVertical as CleaningServices, FlipVertical as Analytics, BarChart3, Brain, Database } from 'lucide-react';
+import { 
+  Home, 
+  RectangleVertical as CleaningServices, 
+  FlipVertical as Analytics, 
+  BarChart3, 
+  Brain, 
+  Database,
+  MessageSquare // ✅ Added icon for Chat with Data
+} from 'lucide-react';
 
 interface NavigationProps {
   activeTab: string;
@@ -14,6 +22,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
     { id: 'analytics', label: 'Analytics', icon: Analytics },
     { id: 'visualizations', label: 'Visualizations', icon: BarChart3 },
     { id: 'insights', label: 'AI Insights', icon: Brain },
+    { id: 'chat', label: 'Chat with Data', icon: MessageSquare }, // ✅ New tab
   ];
 
   return (
@@ -59,3 +68,4 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
 };
 
 export default Navigation;
+
