@@ -12,7 +12,7 @@ type Props = { dataset: any };
 
 const ChatWithData: React.FC<Props> = ({ dataset }) => {
   const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState<string>(""); // ✅ no duplicate/null
+  const [answer, setAnswer] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [preview, setPreview] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -40,7 +40,6 @@ const ChatWithData: React.FC<Props> = ({ dataset }) => {
   const renderChart = (s: any) => {
     if (!s || !dataset?.rows) return null;
     const data = dataset.rows;
-
     switch (s.type) {
       case "bar":
         return (
@@ -72,16 +71,8 @@ const ChatWithData: React.FC<Props> = ({ dataset }) => {
         return (
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
-              <Pie
-                data={data}
-                dataKey={s.y}
-                nameKey={s.x}
-                cx="50%"
-                cy="50%"
-                outerRadius={100}
-                label
-              >
-                {data.map((_: any, idx: number) => <Cell key={idx} />)}
+              <Pie data={data} dataKey={s.y} nameKey={s.x} cx="50%" cy="50%" outerRadius={100} label>
+                {data.map((_: any, idx: number) => (<Cell key={idx} />))}
               </Pie>
               <Tooltip />
             </PieChart>
@@ -107,8 +98,6 @@ const ChatWithData: React.FC<Props> = ({ dataset }) => {
   return (
     <div className="p-4 rounded-2xl border border-gray-800 bg-[#0F1418]">
       <div className="text-sm text-gray-200 mb-2">Chat with Data (backend-powered)</div>
-
-      {/* Input box + Ask button */}
       <div className="flex gap-2">
         <input
           className="flex-1 bg-black/40 border border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-100"
@@ -116,19 +105,13 @@ const ChatWithData: React.FC<Props> = ({ dataset }) => {
           value={question}
           onChange={e => setQuestion(e.target.value)}
         />
-        <button
-          onClick={ask}
-          disabled={loading}
-          className="px-3 py-2 rounded-xl bg-blue-600 text-white text-sm"
-        >
+        <button onClick={ask} disabled={loading} className="px-3 py-2 rounded-xl bg-blue-600 text-white text-sm">
           {loading ? "Asking..." : "Ask"}
         </button>
       </div>
 
-      {/* Answer */}
       {answer && <div className="mt-3 text-gray-300 text-sm">💡 {answer}</div>}
 
-      {/* Data Preview */}
       {preview.length > 0 && (
         <div className="mt-3 max-h-60 overflow-auto text-xs text-gray-200">
           <table className="min-w-full">
@@ -143,9 +126,7 @@ const ChatWithData: React.FC<Props> = ({ dataset }) => {
               {preview.map((row, idx) => (
                 <tr key={idx}>
                   {Object.keys(preview[0]).map((k) => (
-                    <td key={k} className="pr-3 py-1 border-b border-gray-800">
-                      {String(row[k])}
-                    </td>
+                    <td key={k} className="pr-3 py-1 border-b border-gray-800">{String(row[k])}</td>
                   ))}
                 </tr>
               ))}
@@ -154,11 +135,11 @@ const ChatWithData: React.FC<Props> = ({ dataset }) => {
         </div>
       )}
 
-      {/* Suggested Charts */}
       {suggestions.length > 0 && (
         <div className="mt-4 space-y-4">
           {suggestions.map((s, idx) => (
-            <div key={idx} className="border border-gray-700 rounded-xl p-2">
+            <div key={idx} className="border border-gray-700 rounded-lg p-3 bg-black/30">
+              <div className="text-sm text-gray-400 mb-2">Suggested {s.type} chart</div>
               {renderChart(s)}
             </div>
           ))}
