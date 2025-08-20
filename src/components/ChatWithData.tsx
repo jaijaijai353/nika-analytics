@@ -1,118 +1,145 @@
 import React, { useState } from "react";
 import {
-  ResponsiveContainer,
-  BarChart, Bar,
-  LineChart, Line,
-  PieChart, Pie, Cell,
-  ScatterChart, Scatter,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend
+  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  XAxis, YAxis, Tooltip, CartesianGrid, Legend, ScatterChart, Scatter
 } from "recharts";
 
-type Props = { dataset: any };
-
-const ChatWithData: React.FC<Props> = ({ dataset }) => {
+export default function ChatWithData({ dataset }: { dataset: any[] }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);
   const [preview, setPreview] = useState<any[]>([]);
-  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [charts, setCharts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const ask = async () => {
-    if (!dataset || !dataset.data) return;
+  async function ask() {
     setLoading(true);
+    setAnswer(null);
+    setCharts([]);
     try {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      const res = await fetch("/api/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`, // <- from .env
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
-            {
-              role: "user",
-              content: `You are a data analyst. Dataset sample: ${JSON.stringify(
-                dataset.data.slice(0, 20)
-              )}\nQuestion: ${question}`,
-            },
-          ],
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, dataset }),
       });
-
-      const j = await res.json();
-      setAnswer(j.choices?.[0]?.message?.content || "No answer.");
-      setPreview(dataset.data.slice(0, 5));
-      setSuggestions([
-        {
-          type: "bar",
-          x: Object.keys(dataset.data[0])[0],
-          y: Object.keys(dataset.data[0])[1],
-        },
-      ]);
-    } catch (e) {
-      setAnswer("❌ Failed to call OpenAI API. Check your key.");
-    } finally {
-      setLoading(false);
+      const data = await res.json();
+      setAnswer(data.answer || "No answer.");
+      setPreview(data.data_preview || []);
+      setCharts(data.charts || []);
+    } catch {
+      setAnswer("Error contacting AI.");
     }
-  };
+    setLoading(false);
+  }
+
+  function renderChart(chart: any, index: number) {
+    const data = preview;
+    if (!data.length) return null;
+
+    switch (chart.type) {
+      case "bar":
+        return (
+          <BarChart key={index} width={400} height={250} data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey={chart.x} />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            <Bar dataKey={chart.y} fill="#8884d8" />
+          </BarChart>
+        );
+
+      case "line":
+        return (
+          <LineChart key={index} width={400} height={250} data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey={chart.x} />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            <Line type="monotone" dataKey={chart.y} stroke="#82ca9d" />
+          </LineChart>
+        );
+
+      case "pie":
+        return (
+          <PieChart key={index} width={400} height={250}>
+            <Pie
+              data={data}
+              dataKey={chart.y}
+              nameKey={chart.x}
+              cx="50%"
+              cy="50%"
+              outerRadius={80}
+              fill="#8884d8"
+              label
+            >
+              {data.map((_, i) => (
+                <Cell key={i} fill={["#8884d8", "#82ca9d", "#ffc658"][i % 3]} />
+              ))}
+            </Pie>
+            <Tooltip />
+          </PieChart>
+        );
+
+      case "scatter":
+        return (
+          <ScatterChart key={index} width={400} height={250}>
+            <CartesianGrid />
+            <XAxis dataKey={chart.x} name={chart.x} />
+            <YAxis dataKey={chart.y} name={chart.y} />
+            <Tooltip cursor={{ strokeDasharray: "3 3" }} />
+            <Scatter data={data} fill="#8884d8" />
+          </ScatterChart>
+        );
+
+      default:
+        return <p key={index}>Unsupported chart type: {chart.type}</p>;
+    }
+  }
 
   return (
-    <div className="p-4 rounded-2xl border border-gray-800 bg-[#0F1418]">
-      <div className="text-sm text-gray-200 mb-2">Chat with Data (AI-powered)</div>
-      <div className="flex gap-2">
-        <input
-          className="flex-1 bg-black/40 border border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-100"
-          placeholder="e.g., top 5 by revenue, sum of sales by region"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-        />
-        <button
-          onClick={ask}
-          disabled={loading}
-          className="px-3 py-2 rounded-xl bg-blue-600 text-white text-sm"
-        >
-          {loading ? "Asking..." : "Ask"}
-        </button>
-      </div>
+    <div className="p-4 border rounded shadow-md bg-white">
+      <h2 className="text-xl font-bold mb-2">Chat with Data</h2>
+      <textarea
+        className="border w-full p-2 rounded mb-2"
+        placeholder="Ask a question about your dataset..."
+        value={question}
+        onChange={(e) => setQuestion(e.target.value)}
+      />
+      <button
+        onClick={ask}
+        disabled={loading}
+        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+      >
+        {loading ? "Thinking..." : "Ask"}
+      </button>
 
-      {answer && <div className="mt-3 text-gray-300 text-sm">💡 {answer}</div>}
+      {answer && (
+        <div className="mt-4">
+          <h3 className="font-semibold">Answer:</h3>
+          <p>{answer}</p>
+        </div>
+      )}
 
       {preview.length > 0 && (
-        <div className="mt-3 max-h-60 overflow-auto text-xs text-gray-200">
-          <table className="min-w-full">
-            <thead>
-              <tr>
-                {Object.keys(preview[0]).map((k) => (
-                  <th
-                    key={k}
-                    className="text-left pr-3 py-1 border-b border-gray-700"
-                  >
-                    {k}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {preview.map((row, idx) => (
-                <tr key={idx}>
-                  {Object.keys(preview[0]).map((k) => (
-                    <td
-                      key={k}
-                      className="pr-3 py-1 border-b border-gray-800"
-                    >
-                      {String(row[k])}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mt-4">
+          <h3 className="font-semibold">Data Preview:</h3>
+          <pre className="text-sm bg-gray-100 p-2 rounded overflow-x-auto">
+            {JSON.stringify(preview, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      {charts.length > 0 && (
+        <div className="mt-4">
+          <h3 className="font-semibold mb-2">Charts:</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {charts.map((chart, i) => renderChart(chart, i))}
+          </div>
         </div>
       )}
     </div>
   );
-};
+}
 
-export default ChatWithData;
 
