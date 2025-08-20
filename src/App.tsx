@@ -8,6 +8,7 @@ import DataCleaning from './components/DataCleaning';
 import Analytics from './components/Analytics';
 import Visualizations from './components/Visualizations';
 import AIInsights from './components/AIInsights';
+import ChatWithData from './components/ChatWithData'; // ✅ Added import
 
 const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -40,6 +41,8 @@ const AppContent: React.FC = () => {
         return <Visualizations />;
       case 'insights':
         return <AIInsights />;
+      case 'chat': // ✅ New case for ChatWithData
+        return <ChatWithData dataset={dataset?.data || []} />;
       default:
         return <Overview />;
     }
@@ -89,3 +92,4 @@ function App() {
 }
 
 export default App;
+
