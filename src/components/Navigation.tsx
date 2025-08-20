@@ -7,7 +7,7 @@ import {
   BarChart3, 
   Brain, 
   Database,
-  MessageSquare // ✅ Added icon for Chat with Data
+  MessageSquareText // 👈 for ChatWithData
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -22,7 +22,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
     { id: 'analytics', label: 'Analytics', icon: Analytics },
     { id: 'visualizations', label: 'Visualizations', icon: BarChart3 },
     { id: 'insights', label: 'AI Insights', icon: Brain },
-    { id: 'chat', label: 'Chat with Data', icon: MessageSquare }, // ✅ New tab
+    { id: 'chat', label: 'Chat with Data', icon: MessageSquareText }, // 👈 NEW TAB
   ];
 
   return (
@@ -68,4 +68,5 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
 };
 
 export default Navigation;
+
 
