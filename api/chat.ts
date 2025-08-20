@@ -1,7 +1,6 @@
 // api/chat.ts - Vercel Serverless Function for Vite + React
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-// ✅ Read API key from Vercel Environment Variables
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -19,7 +18,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "Missing 'question' or 'dataset' array in body." });
     }
 
-    const sample = dataset.slice(0, 50); // limit payload
+    const sample = dataset.slice(0, 50); // keep payload small
 
     const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -33,16 +32,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         messages: [
           {
             role: "system",
-            content: [
-              "You are a strict JSON generator for data analysis.",
-              "Always reply with a single JSON object with EXACT keys:",
-              "{",
-              '  \"answer\": string,',
-              '  \"data_preview\": array of objects (up to 10 rows),',
-              '  \"charts\": array of objects like { \"type\": \"bar|line|pie|scatter\", \"x\": string, \"y\": string }',
-              "}",
-              "Do not include any extra commentary.",
-            ].join(" "),
+            content:
+              "You are a strict JSON generator for data analysis. Always reply with ONLY a single JSON object with keys: { \"answer\": string, \"data_preview\": array of objects (up to 10 rows), \"charts\": array of objects like { \"type\": \"bar|line|pie|scatter\", \"x\": string, \"y\": string } }. No extra text, no commentary.",
           },
           {
             role: "user",
@@ -63,13 +54,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       payload = JSON.parse(text);
     } catch {
       payload = {
-        answer: text || "No answer from model.",
+        answer: text || "No structured answer from AI.",
         data_preview: sample.slice(0, 10),
         charts: [],
       };
     }
 
-    // Ensure safety
+    // safety defaults
     if (!payload || typeof payload !== "object") {
       payload = { answer: "No answer.", data_preview: sample.slice(0, 10), charts: [] };
     }
