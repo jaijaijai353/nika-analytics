@@ -1,14 +1,16 @@
 // api/chat.ts - Vercel Serverless Function for Vite + React
-// NOTE: Contains a hardcoded API key per user's request. Do NOT commit this for public repos.
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-// ⚠️ SECURITY WARNING: This is hardcoded for convenience only.
-// Move this to an environment variable (process.env.OPENAI_API_KEY) for production.
-const OPENAI_API_KEY = "REPLACE_WITH_YOUR_OPENAI_KEY";
+// ✅ Secure: Read API key from environment variable
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  if (!OPENAI_API_KEY) {
+    return res.status(500).json({ error: "Missing OpenAI API key. Set OPENAI_API_KEY in Vercel env." });
   }
 
   try {
@@ -36,9 +38,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               "You are a strict JSON generator for data analysis.",
               "Always reply with a single JSON object with EXACT keys:",
               "{",
-              '  "answer": string,',
-              '  "data_preview": array of objects (up to 10 rows),',
-              '  "charts": array of objects like { "type": "bar|line|pie|scatter", "x": string, "y": string }',
+              '  \"answer\": string,',
+              '  \"data_preview\": array of objects (up to 10 rows),',
+              '  \"charts\": array of objects like { \"type\": \"bar|line|pie|scatter\", \"x\": string, \"y\": string }',
               "}",
               "Do not include any extra commentary."
             ].join(" ")
@@ -61,7 +63,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       payload = JSON.parse(text);
     } catch (_e) {
-      // Fallback if model didn't return strict JSON
       payload = {
         answer: text || "No answer from model.",
         data_preview: sample.slice(0, 10),
@@ -69,7 +70,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
     }
 
-    // Basic shape safety
     if (!payload || typeof payload !== "object") {
       payload = { answer: "No answer.", data_preview: sample.slice(0, 10), charts: [] };
     }
@@ -86,3 +86,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "Failed to contact OpenAI" });
   }
 }
+
