@@ -1,7 +1,7 @@
 // api/chat.ts - Vercel Serverless Function for Vite + React
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-// ✅ Secure: Read API key from environment variable
+// ✅ Read API key from Vercel Environment Variables
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -19,58 +19,57 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "Missing 'question' or 'dataset' array in body." });
     }
 
-    const sample = dataset.slice(0, 50); // keep payload small
+    const sample = dataset.slice(0, 50); // limit payload
 
     const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${OPENAI_API_KEY}`
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        temperature: 0,
-        response_format: { type: "json_object" }, // 👈 enforce JSON only
+        temperature: 0.2,
         messages: [
           {
             role: "system",
-            content:
-              "You are a data analysis assistant. ALWAYS respond with a strict JSON object only. Format:\n" +
-              "{\n" +
-              '  "answer": string,\n' +
-              '  "data_preview": array of objects (max 10 rows),\n' +
-              '  "charts": array of objects like { "type": "bar|line|pie|scatter", "x": string, "y": string }\n' +
-              "}\n" +
-              "Never include explanations, markdown, or text outside the JSON object."
+            content: [
+              "You are a strict JSON generator for data analysis.",
+              "Always reply with a single JSON object with EXACT keys:",
+              "{",
+              '  \"answer\": string,',
+              '  \"data_preview\": array of objects (up to 10 rows),',
+              '  \"charts\": array of objects like { \"type\": \"bar|line|pie|scatter\", \"x\": string, \"y\": string }',
+              "}",
+              "Do not include any extra commentary.",
+            ].join(" "),
           },
           {
             role: "user",
             content: JSON.stringify({
               question,
-              dataset_sample: sample
-            })
-          }
-        ]
-      })
+              dataset_sample: sample,
+            }),
+          },
+        ],
+      }),
     });
 
     const data = await openaiRes.json();
     const text = data?.choices?.[0]?.message?.content || "";
 
-    console.log("RAW MODEL RESPONSE:", text); // 👈 Debugging
-
-    let payload: any = null;
+    let payload: any;
     try {
       payload = JSON.parse(text);
-    } catch (_e) {
+    } catch {
       payload = {
-        answer: "Model did not return valid JSON.",
+        answer: text || "No answer from model.",
         data_preview: sample.slice(0, 10),
-        charts: []
+        charts: [],
       };
     }
 
-    // ✅ Safety checks
+    // Ensure safety
     if (!payload || typeof payload !== "object") {
       payload = { answer: "No answer.", data_preview: sample.slice(0, 10), charts: [] };
     }
