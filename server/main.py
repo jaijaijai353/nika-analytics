@@ -1,4 +1,3 @@
-
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,6 +24,15 @@ except Exception:
 
 app = FastAPI(title="Nika AI Analytics API", version="0.1.0")
 
+# ✅ Allow frontend to call backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # you can restrict this to your Vercel URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 class InsightsRequest(BaseModel):
     data: List[Dict[str, Any]]
 
@@ -41,18 +49,19 @@ class AnomalyRequest(BaseModel):
     data: List[Dict[str, Any]]
     numeric_columns: Optional[List[str]] = None
 
+class ChatRequest(BaseModel):   # 👈 new for /api/chat
+    question: str
+    dataset: List[Dict[str, Any]]
+
 def _coerce_dataframe(data: List[Dict[str, Any]]) -> pd.DataFrame:
     df = pd.DataFrame(data)
-    # Try parse dates
     for col in df.columns:
         if df[col].dtype == object:
-            # attempt numeric cast
             try:
                 df[col] = pd.to_numeric(df[col])
                 continue
             except Exception:
                 pass
-            # attempt datetime cast
             try:
                 df[col] = pd.to_datetime(df[col])
             except Exception:
@@ -67,20 +76,17 @@ def insights(req: InsightsRequest):
     if df.empty:
         return result
 
-    # Basic profiling
     result["row_count"] = int(len(df))
     result["column_count"] = int(df.shape[1])
 
-    # Numeric summaries
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     for col in numeric_cols[:10]:
         s = df[col].dropna()
-        if len(s) == 0: 
+        if len(s) == 0:
             continue
         insight = f"'{col}': mean={s.mean():.2f}, median={s.median():.2f}, std={s.std(ddof=0):.2f}, min={s.min():.2f}, max={s.max():.2f}."
         result["insights"].append(insight)
 
-    # Trend hint for first datetime + numeric
     dt_cols = df.select_dtypes(include=["datetime64[ns]", "datetime64[ns, UTC]"]).columns.tolist()
     if dt_cols and numeric_cols:
         dt = dt_cols[0]
@@ -90,7 +96,7 @@ def insights(req: InsightsRequest):
             first, last = ts[val].iloc[0], ts[val].iloc[-1]
             change = ((last - first) / (first if first else 1)) * 100
             result["insights"].append(f"Time trend on '{val}' shows a {change:.1f}% change from start to end.")
-    # Simple correlation
+
     if len(numeric_cols) >= 2:
         corr = df[numeric_cols].corr().abs().unstack().sort_values(ascending=False)
         corr = corr[corr < 0.999].dropna()
@@ -98,7 +104,6 @@ def insights(req: InsightsRequest):
             (a,b), v = corr.index[0], corr.iloc[0]
             result["insights"].append(f"Strongest correlation: {a} ~ {b} (|r|={v:.2f}).")
 
-    # Quick outliers (IQR) for first few columns
     for col in numeric_cols[:5]:
         s = df[col].dropna()
         if len(s) < 8:
@@ -115,11 +120,7 @@ def insights(req: InsightsRequest):
 @app.post("/api/query")
 async def query_data(req: QueryRequest):
     import json
-    import pandas as pd
-
     df = pd.DataFrame(req.data)
-
-    # Compact context
     preview = df.head(10).to_dict(orient="records")
     schema = list(df.columns)
 
@@ -158,10 +159,8 @@ async def query_data(req: QueryRequest):
             temperature=0.2,
         )
         content = completion.choices[0].message.content
-        # try parse JSON
         result = json.loads(content)
     except Exception as e:
-        # Fallback minimal answer
         result = {"answer": f"Could not process with GPT: {str(e)}", "suggestions": []}
 
     return result
@@ -176,19 +175,16 @@ def forecast(req: ForecastRequest):
         return {"message": "No data or missing target.", "forecast": []}
 
     if not dt_col:
-        # best guess: first datetime column
         dt_candidates = df.select_dtypes(include=["datetime64[ns]","datetime64[ns, UTC]"]).columns.tolist()
         dt_col = dt_candidates[0] if dt_candidates else None
 
     if dt_col and dt_col in df.columns:
         ts = df[[dt_col, target]].dropna().sort_values(dt_col)
-        ts = ts.set_index(dt_col)[target].asfreq(pd.infer_freq(ts[dt_col]) if dt_col in df.columns else None)
+        ts = ts.set_index(dt_col)[target]
     else:
-        # Use index as proxy
         ts = df[target].dropna()
         ts.index = pd.RangeIndex(start=0, stop=len(ts), step=1)
 
-    # Try ARIMA
     forecast_values = []
     try:
         if sm is not None and len(ts) >= 8:
@@ -199,7 +195,6 @@ def forecast(req: ForecastRequest):
         else:
             raise RuntimeError("statsmodels not available or too few points")
     except Exception:
-        # Fallback: moving average projection
         window = min(5, max(2, len(ts)//4)) if len(ts) >= 2 else 2
         ma = ts.rolling(window=window).mean().dropna()
         last = float(ma.iloc[-1]) if len(ma) else float(ts.iloc[-1])
@@ -230,10 +225,34 @@ def anomaly(req: AnomalyRequest):
         pred = model.predict(X)  # -1 = anomaly
         anomalies_idx = X.index[pred == -1].tolist()
     except Exception:
-        # Fallback: z-score threshold
-        from numpy import mean, std
         z = (X - X.mean()) / (X.std(ddof=0) + 1e-9)
         mask = (np.abs(z) > 3).any(axis=1)
         anomalies_idx = X.index[mask].tolist()
 
     return {"anomalies": anomalies_idx}
+
+# 👇 NEW ENDPOINT for ChatWithData.tsx
+@app.post("/api/chat")
+def chat_with_data(req: ChatRequest):
+    df = _coerce_dataframe(req.dataset)
+    preview = df.head(10).to_dict(orient="records")
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a data analyst assistant."},
+                {"role": "user", "content": f"Dataset preview: {preview}\n\nQuestion: {req.question}"}
+            ],
+            max_tokens=500
+        )
+        answer = response.choices[0].message.content.strip()
+    except Exception as e:
+        answer = f"OpenAI error: {str(e)}"
+
+    return {
+        "answer": answer,
+        "data_preview": preview,
+        "charts": []
+    }
+
